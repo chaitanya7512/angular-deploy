@@ -8,6 +8,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # Optional: Set a timeout for the job
 
     steps:
       - name: Checkout code
@@ -21,19 +22,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug before running tests
-        run: echo "Running tests at $(date)"
-
       - name: Run tests
         id: test
-        run: npm test
-
-      - name: Debug after running tests
-        run: echo "Finished tests at $(date)"
+        run: |
+          npm run test -- --watch=false --browsers=ChromeHeadless || exit 1
 
       - name: Build Angular project
         if: ${{ steps.test.outcome == 'success' }}
         run: npm run build -- --prod
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install awscli
 
       - name: Deploy to S3
         if: ${{ steps.test.outcome == 'success' }}
@@ -42,5 +44,4 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          npm install -g aws-cli
           aws s3 sync dist/angular-deploy s3://$AWS_S3_BUCKET --delete
